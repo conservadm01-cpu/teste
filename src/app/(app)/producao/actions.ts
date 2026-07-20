@@ -53,6 +53,39 @@ export async function avancarEtapaAction(id: string) {
       },
     });
 
+    if (nextEtapa === "CORTE") {
+      const fichaItens = await tx.fichaProducaoItem.findMany({
+        where: { produtoId: ordem.produtoId },
+        include: { materiaPrima: true },
+      });
+
+      for (const item of fichaItens) {
+        const necessario = item.quantidade * ordem.quantidade;
+        if (item.materiaPrima.estoqueAtual < necessario) {
+          throw new Error(
+            `Estoque insuficiente de "${item.materiaPrima.nome}" para iniciar o corte. Necessário: ${necessario} ${item.materiaPrima.unidade}, disponível: ${item.materiaPrima.estoqueAtual}.`
+          );
+        }
+      }
+
+      for (const item of fichaItens) {
+        const necessario = item.quantidade * ordem.quantidade;
+        await tx.materiaPrima.update({
+          where: { id: item.materiaPrimaId },
+          data: { estoqueAtual: { decrement: necessario } },
+        });
+        await tx.movimentoEstoque.create({
+          data: {
+            tipo: "SAIDA",
+            itemTipo: "MATERIA_PRIMA",
+            materiaPrimaId: item.materiaPrimaId,
+            quantidade: necessario,
+            motivo: "Consumo automático — início do corte (OS)",
+          },
+        });
+      }
+    }
+
     if (nextEtapa === "CONCLUIDO") {
       await tx.produto.update({
         where: { id: ordem.produtoId },
@@ -79,9 +112,9 @@ export async function deleteOrdemProducao(id: string) {
   const ordem = await prisma.ordemProducao.findUniqueOrThrow({
     where: { id },
   });
-  if (ordem.etapa === "CONCLUIDO") {
+  if (ordem.etapa !== "AGUARDANDO") {
     throw new Error(
-      "Não é possível excluir uma ordem já concluída (estoque já foi movimentado)."
+      "Não é possível excluir uma ordem que já iniciou produção (estoque já foi movimentado)."
     );
   }
   await prisma.ordemProducao.delete({ where: { id } });

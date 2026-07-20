@@ -21,7 +21,10 @@ export default async function OrdemProducaoDetalhePage({
   const { id } = await params;
   const ordem = await prisma.ordemProducao.findUnique({
     where: { id },
-    include: { produto: true, pedido: { include: { cliente: true } } },
+    include: {
+      produto: { include: { fichaItens: { include: { materiaPrima: true } } } },
+      pedido: { include: { cliente: true } },
+    },
   });
 
   if (!ordem) notFound();
@@ -59,6 +62,22 @@ export default async function OrdemProducaoDetalhePage({
           {ordem.quantidade}
         </p>
       </div>
+
+      {ordem.etapa === "AGUARDANDO" && ordem.produto.fichaItens.length > 0 && (
+        <div className={cardClass}>
+          <h2 className="mb-2 text-sm font-semibold text-slate-500">
+            Matéria-prima que será consumida no corte
+          </h2>
+          <ul className="flex flex-col gap-1 text-sm text-slate-700">
+            {ordem.produto.fichaItens.map((item) => (
+              <li key={item.id}>
+                {item.materiaPrima.nome}:{" "}
+                {item.quantidade * ordem.quantidade} {item.materiaPrima.unidade}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className={cardClass}>
         <h2 className="mb-4 text-sm font-semibold text-slate-500">
@@ -99,7 +118,7 @@ export default async function OrdemProducaoDetalhePage({
         )}
       </div>
 
-      {ordem.etapa !== "CONCLUIDO" && (
+      {ordem.etapa === "AGUARDANDO" && (
         <form action={deleteWithId} className="max-w-sm border-t border-slate-200 pt-4">
           <button type="submit" className={dangerButtonClass}>
             Excluir ordem de produção

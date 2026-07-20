@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { changeStatusAction, deletePedido } from "../actions";
+import { changeStatusAction, deletePedido, adicionarItemPedido } from "../actions";
 import {
   cardClass,
   dangerButtonClass,
   inputClass,
+  labelClass,
   primaryButtonClass,
   tableWrapperClass,
   tdClass,
@@ -26,14 +27,21 @@ export default async function PedidoDetalhePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const pedido = await prisma.pedido.findUnique({
-    where: { id },
-    include: {
-      cliente: true,
-      itens: { include: { produto: true } },
-      ordens: true,
-    },
-  });
+  const [pedido, produtos] = await Promise.all([
+    prisma.pedido.findUnique({
+      where: { id },
+      include: {
+        cliente: true,
+        itens: { include: { produto: true } },
+        ordens: true,
+        orcamento: true,
+      },
+    }),
+    prisma.produto.findMany({
+      orderBy: { nome: "asc" },
+      select: { id: true, nome: true, precoVenda: true },
+    }),
+  ]);
 
   if (!pedido) notFound();
 
@@ -44,22 +52,26 @@ export default async function PedidoDetalhePage({
 
   const changeStatusWithId = changeStatusAction.bind(null, id);
   const deleteWithId = deletePedido.bind(null, id);
+  const adicionarItemWithId = adicionarItemPedido.bind(null, id);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Pedido de {pedido.cliente.nome}
-          </h1>
-          <p className="text-sm text-slate-500">{dateBR(pedido.data)}</p>
-        </div>
-        <Link
-          href={`/producao/novo?pedidoId=${pedido.id}`}
-          className={primaryButtonClass}
-        >
-          Criar ordem de produção
-        </Link>
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Pedido de {pedido.cliente.nome}
+        </h1>
+        <p className="text-sm text-slate-500">{dateBR(pedido.data)}</p>
+        {pedido.orcamento && (
+          <p className="text-sm text-slate-500">
+            Gerado a partir do{" "}
+            <Link
+              href={`/orcamentos/${pedido.orcamento.id}`}
+              className="underline hover:text-slate-900"
+            >
+              orçamento
+            </Link>
+          </p>
+        )}
       </div>
 
       <div className={cardClass}>
@@ -90,6 +102,13 @@ export default async function PedidoDetalhePage({
                 </td>
               </tr>
             ))}
+            {pedido.itens.length === 0 && (
+              <tr>
+                <td className={tdClass} colSpan={4}>
+                  Nenhum item adicionado ainda.
+                </td>
+              </tr>
+            )}
           </tbody>
           <tfoot>
             <tr className="border-t border-slate-200">
@@ -102,10 +121,75 @@ export default async function PedidoDetalhePage({
         </table>
       </div>
 
+      {produtos.length > 0 && (
+        <div className={`${cardClass} max-w-xl`}>
+          <h2 className="mb-3 text-sm font-semibold text-slate-500">
+            Adicionar item
+          </h2>
+          <p className="mb-3 text-xs text-slate-400">
+            Cada item adicionado gera automaticamente uma ordem de produção
+            com a ficha técnica do produto.
+          </p>
+          <form
+            action={adicionarItemWithId}
+            className="flex flex-wrap items-end gap-2"
+          >
+            <div className="flex flex-col gap-1">
+              <label htmlFor="produtoId" className={labelClass}>
+                Produto
+              </label>
+              <select
+                id="produtoId"
+                name="produtoId"
+                required
+                className={inputClass}
+              >
+                {produtos.map((produto) => (
+                  <option key={produto.id} value={produto.id}>
+                    {produto.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="quantidade" className={labelClass}>
+                Quantidade
+              </label>
+              <input
+                id="quantidade"
+                name="quantidade"
+                type="number"
+                min="0.01"
+                step="any"
+                required
+                className={`${inputClass} w-28`}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="precoUnitario" className={labelClass}>
+                Preço unit.
+              </label>
+              <input
+                id="precoUnitario"
+                name="precoUnitario"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                className={`${inputClass} w-32`}
+              />
+            </div>
+            <button type="submit" className={primaryButtonClass}>
+              Adicionar
+            </button>
+          </form>
+        </div>
+      )}
+
       {pedido.ordens.length > 0 && (
         <div className={cardClass}>
           <h2 className="mb-3 text-sm font-semibold text-slate-500">
-            Ordens de produção vinculadas
+            Ordens de produção (ficha técnica)
           </h2>
           <ul className="flex flex-col gap-1">
             {pedido.ordens.map((ordem) => (

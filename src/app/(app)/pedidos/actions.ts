@@ -25,15 +25,54 @@ export async function createPedido(formData: FormData) {
     throw new Error("Adicione ao menos um item ao pedido");
   }
 
-  const pedido = await prisma.pedido.create({
-    data: {
-      clienteId,
-      itens: { create: itens },
-    },
+  const pedido = await prisma.$transaction(async (tx) => {
+    const pedido = await tx.pedido.create({
+      data: {
+        clienteId,
+        itens: { create: itens },
+      },
+      include: { itens: true },
+    });
+
+    for (const item of pedido.itens) {
+      await tx.ordemProducao.create({
+        data: {
+          pedidoId: pedido.id,
+          produtoId: item.produtoId,
+          quantidade: item.quantidade,
+        },
+      });
+    }
+
+    return pedido;
   });
 
   revalidatePath("/pedidos");
+  revalidatePath("/producao");
   redirect(`/pedidos/${pedido.id}`);
+}
+
+export async function adicionarItemPedido(pedidoId: string, formData: FormData) {
+  const produtoId = String(formData.get("produtoId") || "");
+  const quantidade = Number(formData.get("quantidade") || 0);
+  const precoUnitario = Number(formData.get("precoUnitario") || 0);
+
+  if (!produtoId) throw new Error("Selecione um produto");
+  if (quantidade <= 0) throw new Error("Quantidade deve ser maior que zero");
+  if (precoUnitario < 0) throw new Error("Preço inválido");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.itemPedido.create({
+      data: { pedidoId, produtoId, quantidade, precoUnitario },
+    });
+    await tx.ordemProducao.create({
+      data: { pedidoId, produtoId, quantidade },
+    });
+  });
+
+  revalidatePath(`/pedidos/${pedidoId}`);
+  revalidatePath("/pedidos");
+  revalidatePath("/producao");
 }
 
 export async function updateStatusPedido(id: string, status: StatusPedido) {
@@ -78,15 +117,22 @@ export async function changeStatusAction(id: string, formData: FormData) {
 }
 
 export async function deletePedido(id: string) {
-  const ordensCount = await prisma.ordemProducao.count({
+  const ordens = await prisma.ordemProducao.findMany({
     where: { pedidoId: id },
   });
-  if (ordensCount > 0) {
+  const iniciadas = ordens.some((o) => o.etapa !== "AGUARDANDO");
+  if (iniciadas) {
     throw new Error(
-      "Não é possível excluir este pedido pois existem ordens de produção vinculadas."
+      "Não é possível excluir este pedido: alguma ordem de produção já iniciou (estoque já foi movimentado)."
     );
   }
-  await prisma.pedido.delete({ where: { id } });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.ordemProducao.deleteMany({ where: { pedidoId: id } });
+    await tx.pedido.delete({ where: { id } });
+  });
+
   revalidatePath("/pedidos");
+  revalidatePath("/producao");
   redirect("/pedidos");
 }

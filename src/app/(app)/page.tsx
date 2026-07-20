@@ -7,6 +7,7 @@ function currency(value: number) {
 export default async function DashboardPage() {
   const [
     totalClientes,
+    leadsAtivos,
     pedidosAbertos,
     ordensEmAndamento,
     materiaPrimas,
@@ -15,6 +16,7 @@ export default async function DashboardPage() {
     contasReceberPendentes,
   ] = await Promise.all([
     prisma.cliente.count(),
+    prisma.lead.count({ where: { estagio: { notIn: ["FECHADO", "PERDIDO"] } } }),
     prisma.pedido.count({ where: { status: { in: ["ABERTO", "EM_PRODUCAO"] } } }),
     prisma.ordemProducao.count({ where: { etapa: { not: "CONCLUIDO" } } }),
     prisma.materiaPrima.findMany(),
@@ -37,6 +39,7 @@ export default async function DashboardPage() {
 
   const cards = [
     { label: "Clientes cadastrados", value: totalClientes },
+    { label: "Leads ativos no funil", value: leadsAtivos },
     { label: "Pedidos em aberto", value: pedidosAbertos },
     { label: "Ordens de produção ativas", value: ordensEmAndamento },
     {

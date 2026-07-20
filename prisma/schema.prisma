@@ -27,14 +27,62 @@ model User {
 }
 
 model Cliente {
-  id        String    @id @default(cuid())
-  nome      String
-  documento String?
-  telefone  String?
-  email     String?
-  endereco  String?
-  createdAt DateTime  @default(now())
-  pedidos   Pedido[]
+  id         String      @id @default(cuid())
+  nome       String
+  documento  String?
+  telefone   String?
+  email      String?
+  endereco   String?
+  createdAt  DateTime    @default(now())
+  pedidos    Pedido[]
+  lead       Lead?
+  orcamentos Orcamento[]
+}
+
+enum EstagioLead {
+  NOVO
+  CONTATO
+  NEGOCIACAO
+  FECHADO
+  PERDIDO
+}
+
+model Lead {
+  id          String      @id @default(cuid())
+  nome        String
+  empresa     String?
+  telefone    String?
+  email       String?
+  origem      String?
+  estagio     EstagioLead @default(NOVO)
+  observacoes String?
+  cliente     Cliente?    @relation(fields: [clienteId], references: [id])
+  clienteId   String?     @unique
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orcamentos  Orcamento[]
+}
+
+enum StatusOrcamento {
+  RASCUNHO
+  ENVIADO
+  APROVADO
+  REJEITADO
+}
+
+model Orcamento {
+  id            String          @id @default(cuid())
+  cliente       Cliente         @relation(fields: [clienteId], references: [id])
+  clienteId     String
+  lead          Lead?           @relation(fields: [leadId], references: [id])
+  leadId        String?
+  descricao     String
+  valorEstimado Float
+  validade      DateTime?
+  status        StatusOrcamento @default(RASCUNHO)
+  pedido        Pedido?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 }
 
 model Fornecedor {
@@ -62,6 +110,7 @@ model MateriaPrima {
   estoqueMinimo  Float               @default(0)
   createdAt      DateTime            @default(now())
   movimentos     MovimentoEstoque[]
+  fichaItens     FichaProducaoItem[]
 }
 
 model Produto {
@@ -72,10 +121,23 @@ model Produto {
   precoVenda    Float              @default(0)
   estoqueAtual  Float              @default(0)
   estoqueMinimo Float              @default(0)
+  instrucoes    String?
   createdAt     DateTime           @default(now())
   itensPedido   ItemPedido[]
   ordens        OrdemProducao[]
   movimentos    MovimentoEstoque[]
+  fichaItens    FichaProducaoItem[]
+}
+
+model FichaProducaoItem {
+  id             String       @id @default(cuid())
+  produto        Produto      @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  produtoId      String
+  materiaPrima   MateriaPrima @relation(fields: [materiaPrimaId], references: [id])
+  materiaPrimaId String
+  quantidade     Float
+
+  @@unique([produtoId, materiaPrimaId])
 }
 
 enum TipoMovimento {
@@ -109,13 +171,15 @@ enum StatusPedido {
 }
 
 model Pedido {
-  id         String        @id @default(cuid())
-  cliente    Cliente       @relation(fields: [clienteId], references: [id])
-  clienteId  String
-  status     StatusPedido  @default(ABERTO)
-  data       DateTime      @default(now())
-  itens      ItemPedido[]
-  ordens     OrdemProducao[]
+  id          String          @id @default(cuid())
+  cliente     Cliente         @relation(fields: [clienteId], references: [id])
+  clienteId   String
+  status      StatusPedido    @default(ABERTO)
+  data        DateTime        @default(now())
+  itens       ItemPedido[]
+  ordens      OrdemProducao[]
+  orcamento   Orcamento?      @relation(fields: [orcamentoId], references: [id])
+  orcamentoId String?         @unique
 }
 
 model ItemPedido {

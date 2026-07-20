@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { updateProduto, deleteProduto } from "../../actions";
 import { ProdutoForm } from "../../produto-form";
-import { dangerButtonClass } from "@/components/ui";
+import { dangerButtonClass, secondaryButtonClass } from "@/components/ui";
 
 export default async function EditarProdutoPage({
   params,
@@ -19,9 +20,14 @@ export default async function EditarProdutoPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold text-slate-900">
-        Editar produto
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Editar produto
+        </h1>
+        <Link href={`/estoque/produtos/${id}/ficha`} className={secondaryButtonClass}>
+          Ficha técnica de produção
+        </Link>
+      </div>
       <ProdutoForm produto={produto} action={updateWithId} />
 
       <form action={deleteWithId} className="max-w-lg border-t border-slate-200 pt-4">

@@ -31,10 +31,18 @@ export async function updateCliente(id: string, formData: FormData) {
 }
 
 export async function deleteCliente(id: string) {
-  const pedidosCount = await prisma.pedido.count({ where: { clienteId: id } });
+  const [pedidosCount, orcamentosCount] = await Promise.all([
+    prisma.pedido.count({ where: { clienteId: id } }),
+    prisma.orcamento.count({ where: { clienteId: id } }),
+  ]);
   if (pedidosCount > 0) {
     throw new Error(
       "Não é possível excluir este cliente pois existem pedidos vinculados a ele."
+    );
+  }
+  if (orcamentosCount > 0) {
+    throw new Error(
+      "Não é possível excluir este cliente pois existem orçamentos vinculados a ele."
     );
   }
   await prisma.cliente.delete({ where: { id } });
