@@ -1,0 +1,241 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PRODUCAO
+  VENDAS
+  FINANCEIRO
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now())
+}
+
+model Cliente {
+  id         String      @id @default(cuid())
+  nome       String
+  documento  String?
+  telefone   String?
+  email      String?
+  endereco   String?
+  createdAt  DateTime    @default(now())
+  pedidos    Pedido[]
+  lead       Lead?
+  orcamentos Orcamento[]
+}
+
+enum EstagioLead {
+  NOVO
+  CONTATO
+  NEGOCIACAO
+  FECHADO
+  PERDIDO
+}
+
+model Lead {
+  id          String      @id @default(cuid())
+  nome        String
+  empresa     String?
+  telefone    String?
+  email       String?
+  origem      String?
+  estagio     EstagioLead @default(NOVO)
+  observacoes String?
+  cliente     Cliente?    @relation(fields: [clienteId], references: [id])
+  clienteId   String?     @unique
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orcamentos  Orcamento[]
+}
+
+enum StatusOrcamento {
+  RASCUNHO
+  ENVIADO
+  APROVADO
+  REJEITADO
+}
+
+model Orcamento {
+  id            String          @id @default(cuid())
+  cliente       Cliente         @relation(fields: [clienteId], references: [id])
+  clienteId     String
+  lead          Lead?           @relation(fields: [leadId], references: [id])
+  leadId        String?
+  descricao     String
+  valorEstimado Float
+  validade      DateTime?
+  status        StatusOrcamento @default(RASCUNHO)
+  pedido        Pedido?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model Fornecedor {
+  id        String   @id @default(cuid())
+  nome      String
+  telefone  String?
+  email     String?
+  createdAt DateTime @default(now())
+}
+
+enum UnidadeMedida {
+  METRO
+  KG
+  UNIDADE
+  ROLO
+  PACOTE
+}
+
+model MateriaPrima {
+  id             String              @id @default(cuid())
+  nome           String
+  tipo           String
+  unidade        UnidadeMedida       @default(UNIDADE)
+  estoqueAtual   Float               @default(0)
+  estoqueMinimo  Float               @default(0)
+  createdAt      DateTime            @default(now())
+  movimentos     MovimentoEstoque[]
+  fichaItens     FichaProducaoItem[]
+}
+
+model Produto {
+  id            String             @id @default(cuid())
+  nome          String
+  sku           String             @unique
+  categoria     String?
+  precoVenda    Float              @default(0)
+  estoqueAtual  Float              @default(0)
+  estoqueMinimo Float              @default(0)
+  instrucoes    String?
+  createdAt     DateTime           @default(now())
+  itensPedido   ItemPedido[]
+  ordens        OrdemProducao[]
+  movimentos    MovimentoEstoque[]
+  fichaItens    FichaProducaoItem[]
+}
+
+model FichaProducaoItem {
+  id             String       @id @default(cuid())
+  produto        Produto      @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  produtoId      String
+  materiaPrima   MateriaPrima @relation(fields: [materiaPrimaId], references: [id])
+  materiaPrimaId String
+  quantidade     Float
+
+  @@unique([produtoId, materiaPrimaId])
+}
+
+enum TipoMovimento {
+  ENTRADA
+  SAIDA
+}
+
+enum ItemEstoqueTipo {
+  MATERIA_PRIMA
+  PRODUTO
+}
+
+model MovimentoEstoque {
+  id             String           @id @default(cuid())
+  tipo           TipoMovimento
+  itemTipo       ItemEstoqueTipo
+  materiaPrima   MateriaPrima?    @relation(fields: [materiaPrimaId], references: [id])
+  materiaPrimaId String?
+  produto        Produto?         @relation(fields: [produtoId], references: [id])
+  produtoId      String?
+  quantidade     Float
+  motivo         String?
+  data           DateTime         @default(now())
+}
+
+enum StatusPedido {
+  ABERTO
+  EM_PRODUCAO
+  FATURADO
+  CANCELADO
+}
+
+model Pedido {
+  id          String          @id @default(cuid())
+  cliente     Cliente         @relation(fields: [clienteId], references: [id])
+  clienteId   String
+  status      StatusPedido    @default(ABERTO)
+  data        DateTime        @default(now())
+  itens       ItemPedido[]
+  ordens      OrdemProducao[]
+  orcamento   Orcamento?      @relation(fields: [orcamentoId], references: [id])
+  orcamentoId String?         @unique
+}
+
+model ItemPedido {
+  id            String   @id @default(cuid())
+  pedido        Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  pedidoId      String
+  produto       Produto  @relation(fields: [produtoId], references: [id])
+  produtoId     String
+  quantidade    Float
+  precoUnitario Float
+}
+
+enum EtapaProducao {
+  AGUARDANDO
+  CORTE
+  COSTURA
+  ACABAMENTO
+  CONCLUIDO
+}
+
+model OrdemProducao {
+  id             String        @id @default(cuid())
+  pedido         Pedido?       @relation(fields: [pedidoId], references: [id])
+  pedidoId       String?
+  produto        Produto       @relation(fields: [produtoId], references: [id])
+  produtoId      String
+  quantidade     Float
+  etapa          EtapaProducao @default(AGUARDANDO)
+  dataInicio     DateTime      @default(now())
+  dataPrevista   DateTime?
+  dataConclusao  DateTime?
+}
+
+enum StatusConta {
+  PENDENTE
+  PAGO
+}
+
+model ContaPagar {
+  id          String      @id @default(cuid())
+  descricao   String
+  fornecedor  String?
+  valor       Float
+  vencimento  DateTime
+  status      StatusConta @default(PENDENTE)
+  dataPago    DateTime?
+  createdAt   DateTime    @default(now())
+}
+
+model ContaReceber {
+  id          String      @id @default(cuid())
+  descricao   String
+  cliente     String?
+  valor       Float
+  vencimento  DateTime
+  status      StatusConta @default(PENDENTE)
+  dataPago    DateTime?
+  createdAt   DateTime    @default(now())
+}
