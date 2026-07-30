@@ -77,6 +77,13 @@ export default async function OrcamentoDetalhePage({
             </p>
           )}
         </div>
+        <Link
+          href={`/orcamentos/${id}/imprimir`}
+          target="_blank"
+          className={secondaryButtonClass}
+        >
+          Imprimir orçamento
+        </Link>
       </div>
 
       {orcamento.pedido ? (
